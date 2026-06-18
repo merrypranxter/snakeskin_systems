@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🐍 Snakeskin Systems</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0805;
+      color: #c9b486;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    h1 {
+      font-size: 1.1rem;
+      letter-spacing: 0.25em;
+      margin-bottom: 0.5rem;
+      color: #efe3c2;
+    }
+    #subtitle {
+      font-size: 0.7rem;
+      color: #7a6a42;
+      margin-bottom: 1rem;
+      letter-spacing: 0.1em;
+    }
+    #canvas-wrap {
+      position: relative;
+      width: 512px;
+      height: 512px;
+      border: 1px solid #3a2a18;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+    }
+    #controls {
+      margin-top: 1rem;
+      width: 512px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem 1rem;
+    }
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    label {
+      font-size: 0.65rem;
+      color: #7a6a42;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    select, input[type=range] {
+      background: #1a1008;
+      color: #c9b486;
+      border: 1px solid #3a2a18;
+      padding: 0.2rem 0.4rem;
+      font-family: inherit;
+      font-size: 0.7rem;
+      width: 100%;
+      cursor: pointer;
+    }
+    input[type=range] { padding: 0; accent-color: #7a6a42; }
+    .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .pill {
+      background: #1a1008;
+      border: 1px solid #3a2a18;
+      color: #7a6a42;
+      font-size: 0.6rem;
+      padding: 0.15rem 0.5rem;
+      cursor: pointer;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: background 0.15s, color 0.15s;
+      user-select: none;
+    }
+    .pill:hover, .pill.active { background: #3a2a18; color: #efe3c2; }
+    #status {
+      font-size: 0.6rem;
+      color: #3a2a18;
+      margin-top: 0.4rem;
+      letter-spacing: 0.1em;
+    }
+    .mutation-grid {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+    }
+    .mutation-grid label { color: #5c3b22; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>🐍 SNAKESKIN SYSTEMS</h1>
+  <p id="subtitle">seven serpents · ~12,000 scales · one quantized field · all chemistry, no paint</p>
+
+  <div id="canvas-wrap">
+    <canvas id="c" width="512" height="512"></canvas>
+  </div>
+  <p id="status">initialising…</p>
+
+  <div id="controls">
+
+    <!-- Species selector -->
+    <div class="ctrl-group" style="grid-column: 1 / -1;">
+      <label>Species Regime</label>
+      <select id="regime">
+        <option value="0">0 — Reticulated Cathedral (Python reticulatus)</option>
+        <option value="1">1 — Gaboon Geometry (Bitis gabonica)</option>
+        <option value="2">2 — Adder Zigzag (Vipera berus)</option>
+        <option value="3">3 — Diamondback Chain (Crotalus)</option>
+        <option value="4">4 — Coral Mimicry Rings (Micrurus)</option>
+        <option value="5">5 — Emerald Flecks (Morelia viridis)</option>
+        <option value="6">6 — Morph Lab (ball python community)</option>
+      </select>
+    </div>
+
+    <!-- Adder morph (regime 2 only) -->
+    <div class="ctrl-group" id="adder-controls">
+      <label>Adder Morph</label>
+      <div class="row">
+        <span class="pill active" data-morph="0">Grey</span>
+        <span class="pill"       data-morph="1">Rust</span>
+        <span class="pill"       data-morph="2">Melanistic</span>
+      </div>
+    </div>
+
+    <!-- Coral mimic toggle (regime 4 only) -->
+    <div class="ctrl-group" id="coral-controls">
+      <label>Band Order</label>
+      <div class="row">
+        <span class="pill active" id="coral-true">True Coral</span>
+        <span class="pill"        id="coral-mimic">Scarlet King (mimic)</span>
+      </div>
+    </div>
+
+    <!-- Emerald maturity (regime 5 only) -->
+    <div class="ctrl-group" id="emerald-controls">
+      <label>Ontogenetic Maturity (juvenile → adult)</label>
+      <input type="range" id="maturity" min="0" max="1" step="0.01" value="1" />
+    </div>
+
+    <!-- Morph-lab mutation sliders (regime 6 only) -->
+    <div class="mutation-grid" id="morph-controls">
+      <div class="ctrl-group">
+        <label>Pied (white-out)</label>
+        <input type="range" class="mutation" data-mut="pied"     min="0" max="1" step="0.01" value="0" />
+      </div>
+      <div class="ctrl-group">
+        <label>Clown (drip)</label>
+        <input type="range" class="mutation" data-mut="clown"    min="0" max="1" step="0.01" value="0" />
+      </div>
+      <div class="ctrl-group">
+        <label>Spider (wobble)</label>
+        <input type="range" class="mutation" data-mut="spider"   min="0" max="1" step="0.01" value="0" />
+      </div>
+      <div class="ctrl-group">
+        <label>Banana (palette)</label>
+        <input type="range" class="mutation" data-mut="banana"   min="0" max="1" step="0.01" value="0" />
+      </div>
+      <div class="ctrl-group">
+        <label>Pastel (contrast)</label>
+        <input type="range" class="mutation" data-mut="pastel"   min="0" max="1" step="0.01" value="0" />
+      </div>
+      <div class="ctrl-group">
+        <label>Axanthic (greyscale)</label>
+        <input type="range" class="mutation" data-mut="axanthic" min="0" max="1" step="0.01" value="0" />
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Three.js from CDN (no bundler required for demo) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"
+    }
+  }
+  </script>
+  <script type="module">
+    import SnakeskinRenderer from './js/SnakeskinRenderer.js';
+
+    const status = document.getElementById('status');
+    const canvas = document.getElementById('c');
+
+    let snake;
+
+    // ── Init ────────────────────────────────────────────────────────────────
+    try {
+      snake = new SnakeskinRenderer(canvas, { regime: 0, width: 512, height: 512, rdSubsteps: 6 });
+      await snake.init();
+      snake.start();
+      status.textContent = 'rendering · regime 0 · reticulated cathedral';
+    } catch (err) {
+      status.textContent = 'error: ' + err.message;
+      console.error(err);
+    }
+
+    // ── Regime switcher ──────────────────────────────────────────────────────
+    const REGIME_NAMES = [
+      'reticulated cathedral', 'gaboon geometry', 'adder zigzag',
+      'diamondback chain', 'coral mimicry rings', 'emerald flecks', 'morph lab'
+    ];
+
+    function showRegimeControls(regime) {
+      document.getElementById('adder-controls').classList.toggle('hidden',   regime !== 2);
+      document.getElementById('coral-controls').classList.toggle('hidden',   regime !== 4);
+      document.getElementById('emerald-controls').classList.toggle('hidden', regime !== 5);
+      document.getElementById('morph-controls').classList.toggle('hidden',   regime !== 6);
+    }
+
+    showRegimeControls(0);
+
+    document.getElementById('regime').addEventListener('change', (e) => {
+      const r = parseInt(e.target.value, 10);
+      snake?.setRegime(r);
+      status.textContent = `rendering · regime ${r} · ${REGIME_NAMES[r]}`;
+      showRegimeControls(r);
+    });
+
+    // ── Adder morphs ────────────────────────────────────────────────────────
+    document.querySelectorAll('[data-morph]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-morph]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (snake) snake.adderMorph = parseInt(btn.dataset.morph, 10);
+      });
+    });
+
+    // ── Coral toggle ─────────────────────────────────────────────────────────
+    const coralTrue  = document.getElementById('coral-true');
+    const coralMimic = document.getElementById('coral-mimic');
+    coralTrue.addEventListener('click', () => {
+      coralTrue.classList.add('active'); coralMimic.classList.remove('active');
+      if (snake) snake.coralMimic = false;
+    });
+    coralMimic.addEventListener('click', () => {
+      coralMimic.classList.add('active'); coralTrue.classList.remove('active');
+      if (snake) snake.coralMimic = true;
+    });
+
+    // ── Emerald maturity ──────────────────────────────────────────────────────
+    document.getElementById('maturity').addEventListener('input', (e) => {
+      if (snake) snake.emeraldMaturity = parseFloat(e.target.value);
+    });
+
+    // ── Morph-lab mutation sliders ────────────────────────────────────────────
+    document.querySelectorAll('.mutation').forEach(slider => {
+      slider.addEventListener('input', (e) => {
+        const key = e.target.dataset.mut;
+        if (snake) snake.mutations[key] = parseFloat(e.target.value);
+      });
+    });
+  </script>
+</body>
+</html>

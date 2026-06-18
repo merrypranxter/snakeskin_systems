@@ -1,0 +1,36 @@
+{
+  "name": "snakeskin-systems",
+  "version": "1.0.0",
+  "description": "Serpent-scale pattern engine: reaction-diffusion morphogen fields quantized onto a jittered Voronoi scale lattice. Seven species regimes with exact parameters and palettes, keeled specular shading, and a pattern-transfer rig.",
+  "type": "module",
+  "main": "js/SnakeskinRenderer.js",
+  "keywords": [
+    "glsl",
+    "reaction-diffusion",
+    "gray-scott",
+    "generative-art",
+    "shaderforge",
+    "reposcripter2",
+    "threejs",
+    "webgl2",
+    "snakeskin",
+    "voronoi",
+    "pattern-transfer"
+  ],
+  "scripts": {
+    "dev":   "npx serve . --cors",
+    "build": "echo 'No bundler required — open index.html directly or use npm run dev'"
+  },
+  "peerDependencies": {
+    "three": ">=0.150.0"
+  },
+  "devDependencies": {
+    "serve": "^14.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/merrypranxter/snakeskin_systems.git"
+  },
+  "homepage": "https://github.com/merrypranxter/snakeskin_systems"
+}
