@@ -1,0 +1,239 @@
+SNAKESKIN SYSTEMS — REPO SEED
+A context source for RepoScripter2 / ShaderForge. This document seeds an AI agent with everything needed to generate serpent-scale generative art: the morphogen math, the scale-lattice quantization, seven species regimes with exact parameters and palettes, and the pattern-transfer rig that lets snakeskin become a reusable lens over any other context repo.
+
+The central thesis. Snake skin is not painted. It is a continuous reaction-diffusion (Turing) morphogen field SAMPLED onto a discrete grid of overlapping scales. The smooth chemistry is the same family that produces leopard rosettes and zebrafish stripes; what makes it read as SERPENT is the quantization — each scale commits to a single averaged color, turning a soft chemical blob into a crisp faceted tile. Get the quantization right and a lava-lamp Turing field snaps into a python. This is the differentiator from reaction_diffusion and morphogenesis: those repos make the field; this repo makes it serpent — quantized, lit, and species-tuned — and then lets you swap any of the three independent layers (structure, content, skin).
+
+
+1. THE MORPHOGEN ENGINE (The Field Beneath The Scales)
+
+Gray-Scott reaction-diffusion is the workhorse. Two virtual chemicals A (substrate) and B (autocatalyst) diffuse and react; B consumes A; the standing pattern at equilibrium is the skin.
+
+  dA/dt = Da * laplacian(A) - A*B*B + F*(1.0 - A)
+  dB/dt = Db * laplacian(B) + A*B*B - (F + k)*B
+
+Da ~ 1.0, Db ~ 0.5 (B diffuses half as fast — the short-range-activator / long-range-inhibitor asymmetry is what makes spots and mazes at all). F is the feed rate, k is the kill rate. The (F, k) pair is the entire personality of the pattern:
+
+  RETICULUM / MAZE regime   F = 0.026  k = 0.051   -> branching net, the python reticulum
+  SPOTS / BLOTCH regime     F = 0.035  k = 0.065   -> discrete saddles and diamonds
+  MOTTLE regime             F = 0.030  k = 0.057   -> soft worm-mottle, camouflage noise
+  WORM / FINGERPRINT        F = 0.039  k = 0.058   -> labyrinthine ridges, dense
+  HOLES / NEGATIVE          F = 0.030  k = 0.062   -> light field punched with dark cells
+
+GLSL update shader (compute.frag), run on a ping-pong FBO pair, RG channels = A,B:
+
+  uniform sampler2D u_state;     // .r = A, .g = B
+  uniform vec2 u_texel;          // 1.0 / resolution
+  uniform vec2 u_fk;             // feed, kill
+  uniform float u_dt;
+
+  vec2 lap(vec2 uv) {
+      vec2 s = vec2(0.0);
+      s += texture(u_state, uv + vec2(-u_texel.x, 0.0)).rg * 0.2;
+      s += texture(u_state, uv + vec2( u_texel.x, 0.0)).rg * 0.2;
+      s += texture(u_state, uv + vec2(0.0, -u_texel.y)).rg * 0.2;
+      s += texture(u_state, uv + vec2(0.0,  u_texel.y)).rg * 0.2;
+      s += texture(u_state, uv + vec2(-u_texel.x,-u_texel.y)).rg * 0.05;
+      s += texture(u_state, uv + vec2( u_texel.x,-u_texel.y)).rg * 0.05;
+      s += texture(u_state, uv + vec2(-u_texel.x, u_texel.y)).rg * 0.05;
+      s += texture(u_state, uv + vec2( u_texel.x, u_texel.y)).rg * 0.05;
+      s -= texture(u_state, uv).rg;   // 9-point laplacian, center weight -1
+      return s;
+  }
+
+  void main() {
+      vec2 uv = gl_FragCoord.xy * u_texel;
+      vec2 st = texture(u_state, uv).rg;     // A, B
+      vec2 L  = lap(uv);
+      float A = st.x, B = st.y;
+      float reaction = A * B * B;
+      float dA = 1.0 * L.x - reaction + u_fk.x * (1.0 - A);
+      float dB = 0.5 * L.y + reaction - (u_fk.x + u_fk.y) * B;
+      gl_FragColor = vec4(clamp(st + vec2(dA, dB) * u_dt, 0.0, 1.0), 0.0, 1.0);
+  }
+
+ANISOTROPY. Real snakes stretch patterns along the body axis. Scale Db non-uniformly (Db_x != Db_y) or warp the laplacian sample offsets to stretch the field longitudinally. This alone turns generic spots into proper dorsal saddles.
+
+PROCEDURAL OVERRIDES. Vipers and elapids cheat the chemistry with developmental geometry, so three regimes are NOT pure RD:
+  - the adder ZIGZAG is a directional triangle wave running down the spine
+  - CORAL banding is a 1D ring field around the body circumference, not a 2D field
+  - GABOON GEOMETRY is a Voronoi-Truchet tessellation of interlocking hourglasses
+These get generated procedurally and then quantized to scales like everything else.
+
+
+2. THE SCALE LATTICE (The Quantizer)
+
+The field is meaningless until it is sampled by scales. Build a jittered hexagonal Voronoi — roughly 4,000 to 12,000 cells across the body. Dorsal scales are small, keeled (a central ridge), and overlap like roof tiles (imbrication); ventral scutes are wide single-row plates.
+
+  struct ScaleCell { vec2 center; vec2 normal; float id; float levels; };
+
+  // Hash a hex grid, jitter the centers, return nearest-cell info
+  ScaleCell voronoiScale(vec2 uv, float density, float jitter) {
+      vec2 g = uv * density;
+      vec2 cellId = floor(g);
+      vec2 best; float bestD = 1e9; vec2 bestId;
+      for (int j = -1; j <= 1; j++)
+      for (int i = -1; i <= 1; i++) {
+          vec2 nb = cellId + vec2(i, j);
+          vec2 off = hash22(nb) * jitter;            // jittered scale center
+          vec2 p = nb + off;
+          float d = distance(g, p);
+          if (d < bestD) { bestD = d; best = p; bestId = nb; }
+      }
+      ScaleCell c;
+      c.center = best / density;
+      c.id     = hash21(bestId);
+      // keel normal: ridge runs along scale long axis, peak in the middle
+      float edge = bestD;                            // 0 at center -> 1 at border
+      c.normal = normalize(vec3(sin((g.x)*6.2831), 0.3, cos((g.y)*6.2831)).xz * (1.0-edge) + vec2(0.0,1.0)).xyy.xz;
+      c.levels = 4.0;                                // posterization steps
+      return c;
+  }
+
+QUANTIZE. Sample the morphogen field at the cell CENTER (not the fragment), then posterize. Sampling at the center is what makes every fragment inside a scale share one color — the faceting.
+
+  float quantize(float v, float levels) {
+      return floor(v * levels + 0.5) / levels;
+  }
+
+
+3. THE SEVEN SPECIES REGIMES (Engine + Palette)
+
+Each regime = a field source + a lattice setting + a palette LUT. Palettes are ordered slow->fast / low->high field value.
+
+[0] RETICULATED CATHEDRAL — Python reticulatus
+  field: Gray-Scott reticulum (F=0.026 k=0.051), longitudinal anisotropy 1.4x
+  lattice: fine, density ~ 90, jitter 0.45, levels 3
+  read: cream cells held in a black leading-net with olive interiors, faint gold sheen
+  palette: ["#0a0805","#3a2a18","#7a6a42","#c9b486","#efe3c2"]  (void -> black lead -> olive -> tan -> cream)
+
+[1] GABOON GEOMETRY — Bitis gabonica
+  field: Voronoi-Truchet interlocking hourglasses (procedural), NOT RD
+  lattice: medium, density ~ 60, jitter 0.3, levels 5 (geometric, crisp)
+  read: leaf-litter dead-still camouflage; buff rectangles, chocolate hourglasses, violet-grey, cream rim
+  palette: ["#2b211a","#5c3b22","#8a6a4a","#b9a07a","#d9c8a8","#7a6f7d"]  (last = the violet-grey)
+
+[2] ADDER ZIGZAG — Vipera berus
+  field: directional triangle wave down the spine (procedural), amplitude 0.18 of body width
+  lattice: medium-coarse, density ~ 50, levels 2 (hard two-tone)
+  read: silver-grey body, single black lightning ribbon; melanistic all-black and rust-red female morphs as palette swaps
+  palette grey:  ["#1a1a1a","#b9bcc0"]    palette rust: ["#2a0f08","#a8502f"]    palette melanistic: ["#050505","#1f1f1f"]
+
+[3] DIAMONDBACK CHAIN — Crotalus
+  field: Gray-Scott spots (F=0.035 k=0.065) masked to a diamond lattice along the spine
+  lattice: medium, density ~ 55, jitter 0.35, levels 3
+  read: dusty olive ground, dark diamonds with cream borders linked spine-to-tail
+  palette: ["#3a3a2a","#6b6347","#9a8f63","#cabf90","#0d0d08"]  (ground -> mid -> light -> cream border -> diamond core)
+
+[4] CORAL MIMICRY RINGS — Micrurus + the mimics
+  field: 1D banding field around body circumference (procedural), band widths per ring order
+  lattice: coarse single-row scute feel, density ~ 30, levels 3 (flat saturated)
+  read: aposematic banding. TOGGLE band order for Batesian mimicry:
+        true coral  = red-yellow-black-yellow-red ("red touch yellow, kill a fellow")
+        scarlet king (mimic) = red-black-yellow-black-red ("red touch black, friend of jack")
+  palette: ["#d7263d","#ffd400","#0a0a0a"]  (red, warning yellow, black)
+
+[5] EMERALD FLECKS — Morelia viridis / Corallus caninus
+  field: Gray-Scott mottle (F=0.030 k=0.057), low contrast, plus sparse bright dorsal triangles
+  lattice: fine, density ~ 80, jitter 0.4, levels 4
+  read: emerald ground, bluish flecks, bone-white vertebral flashes; note ontogenetic shift (yellow/red juveniles -> green adults) as an animatable palette lerp
+  palette: ["#063d2c","#0b6e4f","#2faa6a","#9fe0b0","#f1ece0"]  (deep -> emerald -> lime -> mint -> bone fleck)
+
+[6] MORPH LAB — ball python morph community (THE CHAOS MODE)
+  field: base blotch RD field (F=0.034 k=0.060) corrupted by mutation sliders
+  mutation operators (each 0..1, stackable — this is the maximalist playground):
+    PIED    -> white-out: clamp field to 0 inside expanding random patches
+    CLOWN   -> drip: vertical smear of the field with a downward advection term
+    SPIDER  -> wobble: reduce pattern width, add phase noise (thin stressed lines)
+    BANANA  -> palette shift to lavender/yellow + sparse dark freckles
+    PASTEL  -> contrast lift + brighten, blow out the highlights
+    AXANTHIC-> desaturate to greyscale silver
+  base palette: ["#1a1206","#4a3414","#7a5a2a","#b58d4a","#e8d39a"]
+  banana palette: ["#241a2e","#5a3a6e","#c9a0e0","#ffe27a"]
+
+
+4. SCALE SHADING (Making Tiles, Not Print)
+
+After quantize + palette, light each scale so the surface reads as overlapping oiled keratin:
+
+  vec3 shadeScale(vec3 baseCol, ScaleCell c, vec2 uv, vec3 lightDir) {
+      // keel ridge specular
+      vec3 N = normalize(vec3(c.normal.x, 1.0, c.normal.y));
+      float spec = pow(max(dot(reflect(-lightDir, N), vec3(0,0,1)), 0.0), 24.0);
+      // imbrication: dark at the trailing edge of each scale (overlap shadow)
+      float edge = smoothstep(0.85, 1.0, distance(uv, c.center) * /*density*/ 70.0);
+      baseCol *= mix(1.0, 0.55, edge);
+      baseCol += spec * 0.35;                       // wet oil-slick highlight
+      return baseCol;
+  }
+
+OPTIONAL IRIDESCENCE. Sunbeam snakes (Xenopeltis) and some pythons are structurally iridescent. Add a thin-film term keyed to view angle — pull the model straight from the thin_film_iridescence / structural_color repos and modulate it by 0.15 so it shimmers at grazing angles only.
+
+
+5. PATTERN TRANSFER — THE "MIX WITH OTHER CONTEXT" RIG
+
+This is the feature that makes snakeskin a SYSTEM. Three fully decoupled layers:
+  TOPOLOGY  = which species lattice + field regime  (the structure / the bones)
+  FILL      = what fills the field: RD | a loaded image | another repo's output texture
+  PALETTE   = any LUT, species-accurate or invented  (the skin)
+
+Mix-and-match examples to seed the agent's imagination:
+  - reticulated topology + fluid_dynamics velocity field + vaporwave_aesthetic palette
+  - gaboon geometry + crop_circles field + tibetan_thangka_style palette
+  - diamondback lattice + strange_attractors density texture + radioactive neon palette
+
+Two-species blend (hybrid skin that never evolved):
+  float fieldA = sampleRegime(uv, REGIME_RETICULATED);
+  float fieldB = sampleRegime(uv, REGIME_GABOON);
+  float hybrid = mix(fieldA, fieldB, u_blend);
+  vec3 palette = mix(paletteA(hybrid), paletteB(hybrid), u_blend);
+
+Snakeskin AS A LENS over any incoming field (export this for other repos to import):
+  vec3 snakeskin_lens(vec2 uv, sampler2D incoming, int topology, sampler2D palette) {
+      ScaleCell c = voronoiScale(uv, densityFor(topology), jitterFor(topology));
+      float v     = texture(incoming, c.center).r;     // content from anywhere
+      v           = quantize(v, c.levels);             // snap to the scale
+      vec3 col    = texture(palette, vec2(v, 0.5)).rgb;
+      return shadeScale(col, c, uv, normalize(vec3(0.3,0.6,0.7)));
+  }
+Export the scale lattice itself as a NORMAL/DISPLACEMENT map so other repos can drape physical scales over their own output.
+
+
+6. THE GPU PIPELINE (Assembly Order)
+
+  1. Scale Lattice Pass    -> jittered Voronoi: cell id, center, keel normal (cache to a texture if static)
+  2. Morphogen FBO Loop    -> Gray-Scott ping-pong, ~40 substeps to settle, OR bind an imported field
+  3. Quantize Pass         -> per fragment: find cell, sample field at cell center, posterize
+  4. Palette Map           -> cell value -> species LUT (1x256 DataTexture per regime)
+  5. Scale Shading         -> keel specular + imbrication shadow + optional thin-film
+  6. Post                  -> oil sheen bloom, faint chromatic edge, optional shed-translucency fog
+
+
+7. JS / DATATEXTURE DIRECTIVES (for Copilot boilerplate)
+
+  - WebGL2 + Three.js, full-screen quad for the field, second quad/mesh for the body
+  - store RD state in a RGBA32F texture, ping-pong two render targets, ~40 settle steps before first display
+  - build each species palette as a 1x256 DataTexture from its hex array (linear gradient across stops)
+  - seed the RD field with a noise splat of B in the center; let it grow outward
+  - expose uniforms: u_fk (feed,kill), u_anisotropy, u_density, u_jitter, u_levels, u_regime, u_blend, mutation sliders
+  - the lens function takes an external sampler2D so RepoScripter2 can pipe any context repo's framebuffer in as the fill field
+
+
+8. ECOSYSTEM COMPATIBILITY
+
+  REFERENCES (does not duplicate):
+    reaction_diffusion, reaction_diffision_2  -> the bare Gray-Scott field engine
+    morphogenesis                             -> developmental patterning theory
+    cellular_automata                         -> the discrete-cell mindset; see also the planned reptile_scale_automaton
+    thin_film_iridescence, structural_color   -> the optional iridescent scale sheen
+  FEEDS:
+    textile_pattern_systems, printed_fabric_patterns  -> snakeskin print is a textile lineage
+    psychedelic_fabric_patterns                        -> morph-lab chaos palettes
+  SHARES A PRIMITIVE WITH:
+    cuttlefish_chromatics  -> both quantize a continuous field onto a discrete cell grid.
+                              snakeskin = frozen, lit, species-tuned.
+                              cuttlefish = live, neurally-driven, temporal.
+                              A shared voronoi/scale-cell primitive (planned voronoi_systems) would serve both.
+
+Used by RepoScripter2 as a context source. Part of the ShaderForge ecosystem.
+
+seven serpents. ~12,000 scales. one quantized field. all chemistry, no paint.

@@ -1,0 +1,26 @@
+{
+  "description": "Snakeskin Systems — serpent-scale pattern engine: reaction-diffusion morphogen fields quantized onto a jittered Voronoi scale lattice, seven species regimes with parameters + palettes, keeled specular shading, and a pattern-transfer rig for mixing topology / fill field / palette across the ecosystem. Context source for RepoScripter2.",
+  "files": [
+    "README.md",
+    "repo_seed.txt",
+    "package.json",
+    "index.html",
+    "glsl/compute.frag",
+    "glsl/display.frag",
+    "glsl/utils.glsl",
+    "glsl/shading.glsl",
+    "glsl/lens.glsl",
+    "glsl/species/reticulated.glsl",
+    "glsl/species/gaboon.glsl",
+    "glsl/species/adder.glsl",
+    "glsl/species/diamondback.glsl",
+    "glsl/species/coral.glsl",
+    "glsl/species/emerald.glsl",
+    "glsl/species/morphlab.glsl",
+    "js/SnakeskinRenderer.js",
+    "js/ReactionDiffusion.js",
+    "js/ScaleLattice.js",
+    "js/PatternTransfer.js",
+    "js/SpeciesPalettes.js"
+  ]
+}
