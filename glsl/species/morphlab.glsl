@@ -93,7 +93,6 @@ vec3 morphlab_palette(float v, float banana, float pastel, float axanthic) {
     vec3 ban  = mix(MORPHLAB_PALETTE_BANANA[ib], MORPHLAB_PALETTE_BANANA[ib + 1], fb);
 
     vec3 col = mix(base, ban, clamp(banana, 0.0, 1.0));
-    col = morph_pastel(col.r, pastel) * vec3(1.0);  // scalar pastel on each channel
     col = vec3(
         morph_pastel(col.r, pastel),
         morph_pastel(col.g, pastel),
